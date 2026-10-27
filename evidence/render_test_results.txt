@@ -1,0 +1,10 @@
+Command: python -m pytest -q --basetemp=/tmp/mfapis-render-tests
+Environment: Python 3.12; SQLite-backed tests. TEST_DATABASE_URL not configured.
+Result captured during deployment-package preparation:
+
+.........................s....                                           [100%]
+29 passed, 1 skipped, 1 warning in 2.45s
+
+Skipped: PostgreSQL integration test requiring a separate empty database.
+Warning: StarletteDeprecationWarning — using httpx with starlette.testclient is deprecated; install httpx2 instead.
+This is not a Render deployment result or a new PostgreSQL run.

@@ -1,0 +1,9 @@
+{
+  "snapshot_sha256": "be6543f89ea62b73076caf8b091a534c46fdc9b63f5d3c1775275cc5c6aba25c",
+  "counts": {
+    "ecb": 15330,
+    "treasury": 6487,
+    "worldbank": 6
+  },
+  "description": "Real 2024\u20132025 historical observations downloaded 26 October 2026; not synthetic, not real-time."
+}

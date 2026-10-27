@@ -1,0 +1,1 @@
+{"browser": "Chromium", "passed": ["GDP chart and country filter", "FX table pagination", "date filter", "converter arithmetic", "missing-date error", "CSV download", "Treasury maturity filter", "empty range", "390px mobile layout", "no JavaScript exceptions"]}
