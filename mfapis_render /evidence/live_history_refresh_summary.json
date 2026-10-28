@@ -1,0 +1,48 @@
+{
+  "database": "sqlite",
+  "counts": [
+    {
+      "source": "ecb",
+      "count": 21449,
+      "last_date": "2026-10-28"
+    },
+    {
+      "source": "treasury",
+      "count": 9178,
+      "last_date": "2026-10-28"
+    },
+    {
+      "source": "worldbank",
+      "count": 6,
+      "last_date": "2025-12-31"
+    }
+  ],
+  "refresh_status": [
+    {
+      "source": "ecb",
+      "last_attempt_at": 1793230330,
+      "last_success_at": 1793230342,
+      "status": "ok",
+      "message": "6239 observations reconciled",
+      "next_attempt_at": 1793251942
+    },
+    {
+      "source": "treasury",
+      "last_attempt_at": 1793230342,
+      "last_success_at": 1793230350,
+      "status": "ok",
+      "message": "2756 observations reconciled",
+      "next_attempt_at": 1793251950
+    },
+    {
+      "source": "worldbank",
+      "last_attempt_at": 1793230350,
+      "last_success_at": 1793230358,
+      "status": "ok",
+      "message": "6 observations reconciled",
+      "next_attempt_at": 1793251958
+    }
+  ],
+  "raw_documents": 4,
+  "note": "Local real-source refresh validation; deployed server has not yet been updated."
+}

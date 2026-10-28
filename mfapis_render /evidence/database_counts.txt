@@ -1,0 +1,7 @@
+  source   | count 
+-----------+-------
+ ecb       | 15330
+ treasury  |  6487
+ worldbank |     6
+(3 rows)
+

@@ -1,0 +1,14 @@
+{
+  "checks": [
+    "Missing provider key is clearly labeled; currency names and selectors visible.",
+    "Historical conversion uses actual archived ECB values, USD100 = INR8986.94 on2025-12-31.",
+    "Historical weekend missing-data state is shown.",
+    "Latest UI renders timestamp and converted amount; swap requests reversed currencies (fixtures).",
+    "Changing both currency dropdowns updates request parameters (fixtures).",
+    "60-second auto refresh sends another request; unchecking it stops refresh (fixtures).",
+    "390px mobile layout has no document overflow.",
+    "A stale/error response clears the previous result and displays failure (fixture)."
+  ],
+  "javascript_errors": [],
+  "note": "Latest quote success/error UI states use browser request fixtures; historical conversion uses real archived records. User API key not available in this environment."
+}

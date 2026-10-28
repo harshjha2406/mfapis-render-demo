@@ -1,0 +1,27 @@
+{
+  "database_engine_verified": "sqlite",
+  "counts": {
+    "ecb": 15330,
+    "treasury": 6487,
+    "worldbank": 6
+  },
+  "total_records": 21823,
+  "distinct_revision_snapshots": 21823,
+  "http_attempts_archived": 7,
+  "http_successes": 7,
+  "raw_checksums_verified": true,
+  "postgresql_integration_verified": false,
+  "evidence_scope": "Original build export; historical SQLite verification, not the current Mac status.",
+  "subsequent_mac_evidence": {
+    "postgresql_pipeline_log": "live_etl_run.log",
+    "database_counts": "evidence/database_counts.txt",
+    "validation_summary": "evidence/VALIDATION.md",
+    "reported_test_result": {
+      "passed": 21,
+      "skipped": 0,
+      "warnings": 1
+    },
+    "full_mac_pytest_log_included": false,
+    "reviewer_reran_postgresql": false
+  }
+}

@@ -1,0 +1,76 @@
+[
+  {
+    "request_id": "99533fde43414a5d874d371f192245c6",
+    "source": "ecb",
+    "requested_at": "2026-10-28T23:32:10.483809+00:00",
+    "url": "https://www.ecb.europa.eu/stats/eurofxref/eurofxref-hist.xml",
+    "attempt": 1,
+    "status": 200,
+    "final_url": "https://www.ecb.europa.eu/stats/eurofxref/eurofxref-hist.xml",
+    "bytes": 8210915,
+    "sha256": "c8523df51684f3db17a09bc59e3b3c58c3718269896eacb98e73ec648f5f3c76",
+    "raw_path": "raw/c8523df51684f3db17a09bc59e3b3c58c3718269896eacb98e73ec648f5f3c76.bin",
+    "fetched_at": "2026-10-28T23:32:17.389263+00:00",
+    "elapsed_ms": 6905,
+    "headers": {
+      "Content-Type": "text/xml",
+      "Date": "Wed, 28 Oct 2026 23:32:16 GMT",
+      "Last-Modified": "Wed, 28 Oct 2026 14:56:18 GMT"
+    }
+  },
+  {
+    "request_id": "e3ef9c5688054ba88a4740e4b36b93a1",
+    "source": "treasury",
+    "requested_at": "2026-10-28T23:32:22.410150+00:00",
+    "url": "https://home.treasury.gov/resource-center/data-chart-center/interest-rates/pages/xml?data=daily_treasury_yield_curve&field_tdr_date_value=2025",
+    "attempt": 1,
+    "status": 200,
+    "final_url": "https://home.treasury.gov/resource-center/data-chart-center/interest-rates/pages/xml?data=daily_treasury_yield_curve&field_tdr_date_value=2025",
+    "bytes": 345104,
+    "sha256": "b6299738e804e91b126adbcc9e0e69d1fbeba409839d079752d6cadbe4531c5d",
+    "raw_path": "raw/b6299738e804e91b126adbcc9e0e69d1fbeba409839d079752d6cadbe4531c5d.bin",
+    "fetched_at": "2026-10-28T23:32:29.594386+00:00",
+    "elapsed_ms": 7184,
+    "headers": {
+      "Content-Type": "text/xml; charset=UTF-8",
+      "Date": "Wed, 28 Oct 2026 23:32:29 GMT"
+    }
+  },
+  {
+    "request_id": "f31a983b584d4681a3f874f994256c31",
+    "source": "treasury",
+    "requested_at": "2026-10-28T23:32:29.617732+00:00",
+    "url": "https://home.treasury.gov/resource-center/data-chart-center/interest-rates/pages/xml?data=daily_treasury_yield_curve&field_tdr_date_value=2026",
+    "attempt": 1,
+    "status": 200,
+    "final_url": "https://home.treasury.gov/resource-center/data-chart-center/interest-rates/pages/xml?data=daily_treasury_yield_curve&field_tdr_date_value=2026",
+    "bytes": 320488,
+    "sha256": "afda00ee7d6aaf1a13674dd7dbbccced8594c54b6e0d5e8891618bd50349bea1",
+    "raw_path": "raw/afda00ee7d6aaf1a13674dd7dbbccced8594c54b6e0d5e8891618bd50349bea1.bin",
+    "fetched_at": "2026-10-28T23:32:29.838631+00:00",
+    "elapsed_ms": 221,
+    "headers": {
+      "Content-Type": "text/xml; charset=UTF-8",
+      "Date": "Wed, 28 Oct 2026 23:32:29 GMT"
+    }
+  },
+  {
+    "request_id": "ea73169fa1d24c268348415bda5049ef",
+    "source": "worldbank",
+    "requested_at": "2026-10-28T23:32:30.898699+00:00",
+    "url": "https://api.worldbank.org/v2/country/IND;USA;GBR/indicator/NY.GDP.MKTP.KD.ZG?format=json&date=2024%3A2025&per_page=100&page=1",
+    "attempt": 1,
+    "status": 200,
+    "final_url": "https://api.worldbank.org/v2/country/IND;USA;GBR/indicator/NY.GDP.MKTP.KD.ZG?format=json&date=2024%3A2025&per_page=100&page=1",
+    "bytes": 1397,
+    "sha256": "44bbccad884dacd876053ab786ef80cb08053950a31fcfc2e2af465b7b3fe3b2",
+    "raw_path": "raw/44bbccad884dacd876053ab786ef80cb08053950a31fcfc2e2af465b7b3fe3b2.bin",
+    "fetched_at": "2026-10-28T23:32:38.550987+00:00",
+    "elapsed_ms": 7652,
+    "headers": {
+      "Content-Type": "application/json;charset=utf-8",
+      "Date": "Wed, 28 Oct 2026 23:32:38 GMT",
+      "Last-Modified": "Wed, 28 Oct 2026 23:32:38 GMT"
+    }
+  }
+]

@@ -1,0 +1,8 @@
+{
+  "purpose": "Public provider demo-key connectivity check; not the user account and not production quotes.",
+  "url": "https://api.twelvedata.com/exchange_rate?symbol=EUR%2FUSD&dp=11",
+  "requested_at_unix": 1793230339,
+  "status": 200,
+  "sha256": "5749b632bb24208520136715906ab73175459884ca1e78036b20aecf039259e9",
+  "body": "{\"symbol\":\"EUR/USD\",\"rate\":1.11574,\"timestamp\":1793230200}"
+}

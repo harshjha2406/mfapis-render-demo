@@ -1,0 +1,21 @@
+{
+  "purpose": "Actual adapter call with the provider public demo key for EUR/USD. User account coverage remains untested.",
+  "response": {
+    "symbol": "EUR/USD",
+    "rate": "1.11574",
+    "timestamp": 1793230320,
+    "as_of": "2026-10-28T23:32:00+00:00",
+    "fetched_at": "2026-10-28T23:34:32+00:00",
+    "provider": "twelvedata",
+    "provider_symbol": "EUR/USD",
+    "inverse": false,
+    "mode": "latest",
+    "cached": false,
+    "quote_age_seconds": 152,
+    "cache_age_seconds": 0,
+    "max_quote_age_seconds": 300,
+    "stale": false,
+    "refresh_after_seconds": 60,
+    "attribution": "Data provided by Twelve Data. Conversion calculated by MFAPIs."
+  }
+}
