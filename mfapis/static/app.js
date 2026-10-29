@@ -97,7 +97,7 @@ function availableCurrencies(){return mode()==='latest'?(fxCapabilities?.currenc
 function quoteOptions(preferred){
   const base=$('base').value;
   let codes=availableCurrencies();
-  if(mode()==='latest')codes=codes.filter(c=>c!==base&&fxCapabilities.pairs.some(p=>p===base+'/'+c||p===c+'/'+base));
+  if(mode()==='latest')codes=codes.filter(c=>c!==base&&fxCapabilities.cross_rates||fxCapabilities.pairs.some(p=>p===base+'/'+c||p===c+'/'+base));
   $('quote').replaceChildren(...codes.map(c=>option(c,currencyLabel(c))));
   if(codes.includes(preferred))$('quote').value=preferred;
   $('quote').disabled=!codes.length;
@@ -107,13 +107,13 @@ function configureCurrencies(base='USD',quote='INR'){
   if(codes.includes(base))$('base').value=base;
   quoteOptions(quote);$('base').disabled=!codes.length;$('convert-button').disabled=!codes.length;
 }
-function invalidateFX(){fxToken++;fxBusy=false;clearTimeout(fxTimer);$('conversion-result').textContent='Selection changed. Request a rate for these currencies.';$('conversion-json').textContent='No result for the current selection.';$('fx-updated').textContent='Provider timestamp will appear with the result.';$('fx-status').textContent=mode()==='latest'?'Latest quote':'Historical reference';$('fx-status').classList.remove('warning');message('conversion-error','');$('convert-button').disabled=!$('base').value;}
-function scheduleFX(delay=60000){clearTimeout(fxTimer);if(mode()==='latest'&&$('auto-refresh').checked)fxTimer=setTimeout(()=>{if(!document.hidden&&source==='ecb')convertFX();else scheduleFX(delay);},Math.max(delay,retryAt-Date.now()));}
+function invalidateFX(){fxToken++;fxBusy=false;clearTimeout(fxTimer);$('conversion-result').textContent='Selection changed. Request a rate for these currencies.';$('conversion-json').textContent='No result for the current selection.';$('fx-updated').textContent='Source observation timestamp will appear with the result.';$('fx-status').textContent=mode()==='latest'?'Live quote pending':'Historical reference';$('fx-status').classList.remove('warning');message('conversion-error','');$('convert-button').disabled=!$('base').value;}
+function scheduleFX(delay=15000){clearTimeout(fxTimer);if(mode()==='latest'&&$('auto-refresh').checked)fxTimer=setTimeout(()=>{if(!document.hidden&&source==='ecb')convertFX();else scheduleFX(delay);},Math.max(delay,retryAt-Date.now()));}
 async function convertFX(){
   if(fxBusy||!$('converter').reportValidity())return;
-  if(Date.now()<retryAt){message('conversion-error','Please wait for the retry delay before requesting another quote.');scheduleFX();return;}
+  if(mode()==='latest'&&Date.now()<retryAt){message('conversion-error','Please wait for the retry delay before requesting another quote.');scheduleFX();return;}
   const token=++fxToken;fxBusy=true;clearTimeout(fxTimer);$('convert-button').disabled=true;
-  message('conversion-error','');$('conversion-result').classList.remove('unavailable');$('conversion-result').textContent='Requesting rate…';
+  message('conversion-error','');$('conversion-result').classList.remove('unavailable');$('conversion-result').textContent='Requesting latest market quote…';
   const requestedMode=mode();
   const params=new URLSearchParams({base:$('base').value,quote:$('quote').value,amount:$('amount').value});
   if(requestedMode==='historical')params.set('on',$('conversion-date').value);
@@ -125,15 +125,15 @@ async function convertFX(){
     const small=document.createElement('small');small.textContent=`1 ${r.base} = ${fmt(r.rate,8)} ${r.quote}`;$('conversion-result').append(small);
     $('conversion-json').textContent=JSON.stringify(r,null,2);$('fx-status').classList.remove('warning');
     if(requestedMode==='latest'){
-      $('fx-status').textContent=r.cached?'Latest · cached':'Latest · fetched';
-      $('fx-updated').textContent=`Rate observed: ${new Date(r.as_of).toLocaleString()} · Age at request: ${r.quote_age_seconds}s · Retrieved: ${new Date(r.fetched_at).toLocaleString()}`;
-      scheduleFX(Math.max(60000,(fxCapabilities?.refresh_seconds||60)*1000));
+      $('fx-status').textContent='Fresh market observation';
+      $('fx-updated').textContent=`Source: ${r.source} · Market observation: ${new Date(r.as_of).toLocaleString()} · Age: ${r.quote_age_seconds}s · Received by MFAPIs: ${new Date(r.fetched_at).toLocaleString()} · Bid/ask midpoint`;
+      scheduleFX(Math.max(5000,(fxCapabilities?.refresh_seconds||15)*1000));
     }else{$('fx-status').textContent='Historical reference';$('fx-updated').textContent='ECB observation date: '+displayDate(r.observation_date);}
   }catch(error){if(token!==fxToken)return;
     $('conversion-result').textContent='No current conversion available for this request.';$('conversion-result').classList.add('unavailable');
     $('conversion-json').textContent=JSON.stringify({error:error.message},null,2);$('fx-updated').textContent='No successful quote for the current request.';
     $('fx-status').textContent='Unavailable';$('fx-status').classList.add('warning');message('conversion-error',error.message);
-    retryAt=Date.now()+Math.max(0,error.retryAfter||0)*1000;scheduleFX(Math.max(60000,(error.retryAfter||0)*1000));
+    retryAt=Date.now()+Math.max(0,error.retryAfter||0)*1000;scheduleFX(Math.max(15000,(error.retryAfter||15)*1000));
   }finally{if(token===fxToken){fxBusy=false;$('convert-button').disabled=false;}}
 }
 $('converter').addEventListener('submit',e=>{e.preventDefault();convertFX();});
@@ -144,16 +144,16 @@ $('auto-refresh').addEventListener('change',()=>{clearTimeout(fxTimer);if($('aut
 $('fx-mode').addEventListener('change',()=>{
   const base=$('base').value,quote=$('quote').value;invalidateFX();configureCurrencies(base,quote);
   const historical=mode()==='historical';$('conversion-date-label').hidden=!historical;$('conversion-date').required=historical;$('auto-refresh').disabled=historical;
-  $('convert-button').textContent=historical?'Convert on this date →':'Get latest rate →';
-  $('converter-description').textContent=historical?'Cross-rates calculated from stored ECB daily reference rates.':'Latest provider quotes, with the time each rate was observed.';
+  $('convert-button').textContent=historical?'Convert on this date →':'Get live quote →';
+  $('converter-description').textContent=historical?'Cross-rates calculated from stored ECB daily reference rates.':'MFAPIs computes values from authenticated, authorized source observations and shows the actual quote timestamp.';
   $('fx-attribution').hidden=historical;
-  $('fx-note').textContent=historical?'Source: European Central Bank. Exact observation date; no hidden carry-forward for weekends or holidays. Informational rates only.':'Data provided by Twelve Data. Old or unavailable quotes will not be presented as current. Not an executable trading price.';
+  $('fx-note').textContent=historical?'Source: European Central Bank. Exact observation date; no hidden carry-forward for weekends or holidays. Informational rates only.':'MFAPIs stores, verifies and converts authorized market quotes. The values update only when the upstream feed publishes new observations. Stale or missing data cannot be called live. Not executable rates.';
   convertFX();
 });
 async function initFX(){
   try{fxCapabilities=await get('/v1/fx/currencies');configureCurrencies();
-    $('auto-refresh').parentNode.lastChild.textContent=' Refresh every '+fxCapabilities.refresh_seconds+' seconds';
-    if(!fxCapabilities.configured){$('fx-status').textContent='Setup required';$('conversion-result').textContent='Latest rates need the server’s Twelve Data key. Historical ECB conversion is still available.';return;}
+    $('auto-refresh').parentNode.lastChild.textContent=' Auto-refresh every '+fxCapabilities.refresh_seconds+' seconds';
+    if(!fxCapabilities.configured){$('fx-status').textContent='Feed not configured';$('conversion-result').textContent='Connect an authorized market quote source to MFAPIs. Daily ECB history remains available separately; it is not live forex.';return;}
     convertFX();
   }catch(error){message('conversion-error',error.message);$('fx-status').textContent='Unavailable';}
 }

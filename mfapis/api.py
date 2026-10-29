@@ -1,15 +1,18 @@
-"""Latest FX quotes plus normalized historical datasets."""
+"""MFAPIs-owned FX quote ingestion, calculated conversions, and historical datasets."""
 import os
 import time
 import threading
 from contextlib import asynccontextmanager
 from uuid import uuid4
+import hmac
+from datetime import datetime
+from pydantic import BaseModel, Field
 from datetime import date
 from decimal import Decimal, localcontext
 from typing import Literal
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, HTTPException, Query, Header, Request
 from sqlalchemy import select, func
 from sqlalchemy.exc import SQLAlchemyError
 from fastapi.responses import FileResponse, JSONResponse
@@ -26,8 +29,8 @@ async def lifespan(app):
     stop.set()
 
 
-app = FastAPI(title="MFAPIs Financial Data Explorer", version="0.3.0", lifespan=lifespan,
-              description="Latest FX quotes from Twelve Data, with provider timestamps and bounded caching. Historical ECB reference rates, World Bank GDP and US Treasury yields are separate datasets.")
+app = FastAPI(title="MFAPIs Financial Data Explorer", version="0.5.0", lifespan=lifespan,
+              description="MFAPIs-owned FX market quote intake, storage and conversion. Requires your own authenticated authorized live quote feed; no external forex rate API dependency. Historical ECB, Treasury and World Bank datasets are separate.")
 
 
 @app.exception_handler(fx.FXError)
@@ -70,6 +73,46 @@ async def request_controls(request, call_next):
 @app.get("/v1/fx/currencies")
 def currencies():
     return fx.capabilities()
+
+
+class FXQuoteIn(BaseModel):
+    symbol: str = Field(pattern=r"^[A-Z]{3}/[A-Z]{3}$", max_length=7)
+    bid: Decimal
+    ask: Decimal
+    observed_at: datetime
+    source: str = Field(min_length=2, max_length=64, pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]{1,63}$")
+
+
+def verify_ingest_key(key: str | None):
+    secret = os.getenv("MFAPIS_INGEST_KEY", "").strip()
+    if len(secret)<32:
+        raise fx.FXError(503, "feed_not_configured", "Set a random MFAPIS_INGEST_KEY of at least 32 characters")
+    if not key or not hmac.compare_digest(key, secret):
+        raise fx.FXError(401, "unauthorized", "A valid ingestion key is required")
+
+
+@app.post("/v1/fx/quotes/ingest", status_code=202)
+def ingest_quote(payload: FXQuoteIn, x_mfapis_ingest_key: str | None = Header(default=None)):
+    """Private collector endpoint. Feed adapters send real, authorized market quotes here."""
+    verify_ingest_key(x_mfapis_ingest_key)
+    db=engine()
+    try:
+        return fx.ingest(db, payload.symbol, payload.bid, payload.ask, payload.observed_at, payload.source)
+    finally: db.dispose()
+
+
+@app.get("/v1/fx/quotes")
+def latest_quote_list():
+    db=engine()
+    try: return fx.available_quotes(db)
+    finally: db.dispose()
+
+
+@app.get("/v1/fx/history")
+def fx_history(symbol: str=Query(pattern="^[A-Z]{3}/[A-Z]{3}$"), limit: int=Query(100,ge=1,le=1000)):
+    db=engine()
+    try: return fx.history(db,symbol,limit)
+    finally: db.dispose()
 
 
 @app.get("/v1/exchange-rate")
@@ -125,7 +168,7 @@ def catalogue():
                 "series": [dict(i) for i in instruments if i["source"] == g["source"]]} for g in groups],
                 "refresh": {r["source"]:dict(r) for r in refresh_rows},
                 "automatic_refresh_enabled":os.getenv("AUTO_REFRESH_HISTORY","false").lower()=="true",
-                "note": "Historical source observations; daily or annual frequency. Separate latest FX endpoints use Twelve Data. History refresh checks run while the service is awake when enabled."}
+                "note": "Historical source observations; daily or annual frequency. Live FX endpoints use only fresh authenticated quote observations sent to MFAPIs; no synthetic or daily-reference quotes are labeled live."}
     finally:
         db.dispose()
 
