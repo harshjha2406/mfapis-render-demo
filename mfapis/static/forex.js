@@ -1,4 +1,4 @@
-/* MFAPIs Forex workspace: reads same-origin API only; never calls the upstream provider. */
+/* MFAPIs Forex workspace. Browser talks only to the same-origin local API. */
 'use strict';
 
 const $ = id => document.getElementById(id);
@@ -189,6 +189,35 @@ $('quote').addEventListener('change',convert);
 let debounce;
 $('amount').addEventListener('input',()=>{clearTimeout(debounce);debounce=setTimeout(()=>{if($('amount').checkValidity())convert();},350);});
 $('swap').addEventListener('click',()=>{const b=$('base').value;$('base').value=$('quote').value;$('quote').value=b;$('amount-code').textContent=$('base').value;convert();});
+let providerRefreshing=false;
+async function fetchLatestRates(){
+  if(providerRefreshing)return;
+  providerRefreshing=true;
+  const button=$('fetch-latest');
+  button.disabled=true;
+  button.textContent='Fetching…';
+  showAlert('');
+  try{
+    const response=await fetch('/v1/local/sifting/refresh',{
+      method:'POST',cache:'no-store',credentials:'same-origin',
+      headers:{'X-MFAPIS-Local-Action':'refresh','Accept':'application/json'}
+    });
+    const result=await response.json().catch(()=>({}));
+    if(!response.ok)throw new Error(result.detail || `Fetch error (${response.status})`);
+    await refreshQuotes();
+    if(result.errors?.length){
+      showAlert(`Received ${result.updated} of ${result.requested} provider snapshots. `+result.errors.join(' · '));
+    }else{
+      showAlert(`Received ${result.updated} of ${result.requested} provider snapshots. Refreshing the local board.`);
+    }
+  }catch(error){showAlert('Unable to fetch new SiftingIO quotes: '+error.message);}
+  finally{
+    providerRefreshing=false;
+    button.disabled=false;
+    button.textContent='↡ Fetch latest rates';
+  }
+}
+$('fetch-latest').addEventListener('click',fetchLatestRates);
 $('refresh').addEventListener('click',refreshQuotes);
 $('auto-refresh').addEventListener('change',schedule);
 $('refresh-interval').addEventListener('change',schedule);
