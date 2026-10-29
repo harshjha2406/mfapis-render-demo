@@ -132,6 +132,18 @@ async def database_failure(request, exc):
     return JSONResponse(status_code=503, content={"detail": "Database temporarily unavailable. Please try again shortly."})
 
 
+@app.post("/v1/local/sifting/refresh", include_in_schema=False)
+def refresh_sifting_for_local_dashboard(request: Request):
+    from .local_sifting_refresh import validate_local_request, fetch_and_store
+    validate_local_request(request)
+    return fetch_and_store()
+
+
+@app.get("/forex", include_in_schema=False)
+def forex_dashboard():
+    return FileResponse(STATIC / "forex.html")
+
+
 @app.get("/", include_in_schema=False)
 def dashboard():
     return FileResponse(STATIC / "index.html")
