@@ -15,7 +15,7 @@ from . import fx
 from .db import connect
 
 _LOCK = threading.Lock()
-_LAST_ATTEMPT = 0.0
+_LAST_ATTEMPT = None
 COOLDOWN_SECONDS = 180
 
 
@@ -43,9 +43,10 @@ def fetch_and_store():
         raise HTTPException(429, "Refresh already running")
     try:
         now = time.monotonic()
-        remaining = COOLDOWN_SECONDS - (now - _LAST_ATTEMPT)
-        if remaining > 0:
-            raise HTTPException(429, f"Please wait {int(remaining) + 1}s before another provider refresh")
+        if _LAST_ATTEMPT is not None:
+            remaining = COOLDOWN_SECONDS - (now - _LAST_ATTEMPT)
+            if remaining > 0:
+                raise HTTPException(429, f"Please wait {int(remaining) + 1}s before another provider refresh")
         _LAST_ATTEMPT = now
         try:
             key = sifting_fx_worker.read_key("SIFTING_API_KEY", sifting_fx_worker.KEY_FILE)

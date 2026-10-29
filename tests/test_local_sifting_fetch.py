@@ -45,7 +45,9 @@ def test_manual_refresh_uses_mocked_provider_and_no_secret_in_output(monkeypatch
     monkeypatch.setenv("SIFTING_API_KEY", "not-for-browser")
     monkeypatch.setenv("DATABASE_URL", "sqlite:////private/test.db")
     monkeypatch.setenv("SIFTING_PAIRS", "EUR/USD,GBP/USD")
-    monkeypatch.setattr(live, "_LAST_ATTEMPT", 0.0)
+    monkeypatch.setattr(live, "_LAST_ATTEMPT", None)
+    # The initial request must work even on a newly started CI runner.
+    monkeypatch.setattr(live.time, "monotonic", lambda: 10.0)
     class Db:
         def dispose(self): pass
     monkeypatch.setattr(live, "connect", lambda url, initialize=False: Db())
