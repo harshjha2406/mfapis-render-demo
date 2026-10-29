@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="MFAPIs personal Forex dashboard with verified local market quotes and currency conversions.">
+  <meta name="theme-color" content="#0b1423">
+  <title>Forex Workspace · MFAPIs</title>
+  <link rel="stylesheet" href="/assets/forex.css">
+  <script src="/assets/forex.js" defer></script>
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar" aria-label="Navigation">
+      <a class="brand" href="/" aria-label="MFAPIs home"><span class="brand-symbol">M<span></span></span><span>MFAPIs<span class="brand-period">.</span></span></a>
+      <div class="nav-caption">WORKSPACE</div>
+      <nav class="nav-list">
+        <a class="nav-link active" href="/forex" aria-current="page"><span class="nav-icon">⇄</span> Forex dashboard</a>
+        <a class="nav-link" href="/"><span class="nav-icon">▦</span> Data explorer</a>
+        <a class="nav-link" href="/docs" target="_blank" rel="noopener"><span class="nav-icon">⌘</span> API reference</a>
+      </nav>
+      <div class="sidebar-footer"><span class="tiny-dot"></span><strong>PERSONAL DEVELOPMENT</strong><p>Connected to the MFAPIs engine. No brokerage execution or trading.</p></div>
+    </aside>
+
+    <main class="main">
+      <header class="topbar">
+        <div class="breadcrumbs">Workspace <span>/</span> <strong>Forex overview</strong></div>
+        <div class="topbar-actions"><span class="environment"><span class="tiny-dot"></span> LOCAL DEMO</span><a class="docs-link" href="/docs" target="_blank" rel="noopener">API docs <span aria-hidden="true">↗</span></a></div>
+      </header>
+
+      <div class="content">
+        <section class="hero" aria-labelledby="page-title">
+          <div class="eyebrow"><span class="eyebrow-line"></span> MARKETS / FOREIGN EXCHANGE</div>
+          <div class="hero-title-row">
+            <div><h1 id="page-title">Foreign exchange, <em>made clear.</em></h1><p>Convert currencies using observed market quotes. Every rate comes with its source, age and freshness.</p></div>
+            <div class="status-box" aria-live="polite"><span class="status-label">DATA CONNECTION</span><div class="status-line"><span class="status-beacon" id="connection-beacon"></span><strong id="connection-status">Connecting…</strong></div><small id="last-checked">Checking local API</small></div>
+          </div>
+        </section>
+
+        <div id="global-error" class="alert" role="alert" hidden></div>
+        <section class="stats" aria-label="Market overview">
+          <article class="stat"><div class="stat-label">TRACKED PAIRS <span>↗</span></div><div class="stat-value" id="stat-pairs">—</div><div class="stat-hint">Stored currency pairs</div></article>
+          <article class="stat"><div class="stat-label">FRESH QUOTES <span>◷</span></div><div class="stat-value" id="stat-fresh">—</div><div class="stat-hint">Within the freshness threshold</div></article>
+          <article class="stat"><div class="stat-label">LATEST OBSERVATION <span>↗</span></div><div class="stat-value stat-time" id="stat-observed">—</div><div class="stat-hint" id="stat-observed-date">Waiting for market data</div></article>
+        </section>
+
+        <section class="workspace-grid" aria-label="Forex tools">
+          <article class="panel converter-panel">
+            <div class="panel-heading"><div><div class="eyebrow small">CURRENCY TOOLS</div><h2>Currency converter</h2><p>Calculate using the latest valid midpoint rate.</p></div><span class="panel-icon" aria-hidden="true">⇄</span></div>
+            <form id="converter" autocomplete="off">
+              <div class="field"><label for="amount">You send</label><div class="amount-field"><input id="amount" type="number" value="100" min="0" max="1000000000000" step="any" inputmode="decimal" required><span id="amount-code" aria-hidden="true">EUR</span></div></div>
+              <div class="currency-row"><div class="field"><label for="base">From</label><select id="base" required disabled><option>Loading…</option></select></div><button type="button" class="swap" id="swap" title="Swap currencies" aria-label="Swap currencies">⇄</button><div class="field"><label for="quote">To</label><select id="quote" required disabled><option>Loading…</option></select></div></div>
+              <button class="primary-button" type="submit" id="convert" disabled>Convert currencies <span>→</span></button>
+            </form>
+            <div class="conversion-output" aria-live="polite">
+              <div class="result-caption">ESTIMATED CONVERSION</div>
+              <strong id="converted-amount">—</strong>
+              <div class="result-rate" id="unit-rate">Choose currencies to get started</div>
+              <div class="result-separator"></div>
+              <div class="rate-detail"><span>Source</span><strong id="conversion-source">—</strong></div>
+              <div class="rate-detail"><span>Quote observed</span><strong id="conversion-time">—</strong></div>
+              <div class="rate-detail"><span>Status</span><strong id="conversion-status">Waiting for data</strong></div>
+            </div>
+            <div class="info-note"><span aria-hidden="true">ⓘ</span><span>Indicative bid/ask midpoint—not a tradeable quote. Stale or missing prices are never presented as current.</span></div>
+          </article>
+
+          <article class="panel quote-panel">
+            <div class="panel-heading"><div><div class="eyebrow small">MARKET OVERVIEW</div><h2>Live quote board</h2><p>SiftingIO observations stored by your MFAPIs API.</p></div><a class="icon-button" href="/v1/fx/quotes" target="_blank" rel="noopener" title="Open raw quote JSON" aria-label="Open raw quote JSON">↗</a></div>
+            <div class="quote-tools">
+              <div class="toolbar-note"><span class="pulse-green"></span> <span id="board-caption">Loading recorded quotes…</span></div>
+              <div class="refresh-tools"><label class="auto-label"><input id="auto-refresh" type="checkbox" checked> Auto-update view</label><select id="refresh-interval" aria-label="Display refresh interval"><option value="10000">10s</option><option value="15000" selected>15s</option><option value="30000">30s</option><option value="60000">60s</option></select><button id="refresh" type="button" class="refresh-button" title="Reload saved quotes from the local database">↻ <span>Refresh</span></button></div>
+            </div>
+            <div class="quote-table-wrap"><table><thead><tr><th>Currency pair</th><th class="right">Bid</th><th class="right">Ask</th><th class="right">Midpoint</th><th class="center">Freshness</th></tr></thead><tbody id="quote-rows"><tr><td class="no-data" colspan="5">Connecting to your local API…</td></tr></tbody></table></div>
+            <div class="board-footer"><span id="threshold-note">Freshness threshold: 120 seconds</span><span>Click a pair to convert</span></div>
+            <div class="market-note"><span>DATA REFRESH</span><p>Auto-update rereads your <strong>local MFAPIs database only</strong>. To fetch new SiftingIO quotes, use your running demo's Terminal refresh. This page never spends provider API calls.</p></div>
+          </article>
+        </section>
+
+        <section class="lower-panel"><div class="lower-icon">◷</div><div><h3>Transparent by design</h3><p>Freshness is measured from the source observation time. If the upstream feed stops, the dashboard shows stale/unavailable rather than inventing an exchange rate.</p></div><a href="/v1/fx/currencies" target="_blank" rel="noopener">Supported currencies ↗</a></section>
+        <footer><span>MFAPIs <span class="footer-dot">·</span> Personal Forex development workspace</span><span>Local observations only <span class="footer-dot">·</span> Not financial advice</span></footer>
+      </div>
+    </main>
+  </div>
+</body>
+</html>

@@ -132,6 +132,11 @@ async def database_failure(request, exc):
     return JSONResponse(status_code=503, content={"detail": "Database temporarily unavailable. Please try again shortly."})
 
 
+@app.get("/forex", include_in_schema=False)
+def forex_dashboard():
+    return FileResponse(STATIC / "forex.html")
+
+
 @app.get("/", include_in_schema=False)
 def dashboard():
     return FileResponse(STATIC / "index.html")
