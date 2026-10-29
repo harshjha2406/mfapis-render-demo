@@ -38,6 +38,7 @@
         </section>
 
         <div id="global-error" class="alert" role="alert" hidden></div>
+        <div id="mode-note" class="market-note" role="status" hidden></div>
         <section class="stats" aria-label="Market overview">
           <article class="stat"><div class="stat-label">TRACKED PAIRS <span>↗</span></div><div class="stat-value" id="stat-pairs">—</div><div class="stat-hint">Stored currency pairs</div></article>
           <article class="stat"><div class="stat-label">FRESH QUOTES <span>◷</span></div><div class="stat-value" id="stat-fresh">—</div><div class="stat-hint">Within the freshness threshold</div></article>
@@ -46,7 +47,7 @@
 
         <section class="workspace-grid" aria-label="Forex tools">
           <article class="panel converter-panel">
-            <div class="panel-heading"><div><div class="eyebrow small">CURRENCY TOOLS</div><h2>Currency converter</h2><p>Calculate using the latest valid midpoint rate.</p></div><span class="panel-icon" aria-hidden="true">⇄</span></div>
+            <div class="panel-heading"><div><div class="eyebrow small">CURRENCY TOOLS</div><h2>Currency converter</h2><p id="converter-description">Calculate using the latest valid midpoint rate.</p></div><span class="panel-icon" aria-hidden="true">⇄</span></div>
             <form id="converter" autocomplete="off">
               <div class="field"><label for="amount">You send</label><div class="amount-field"><input id="amount" type="number" value="100" min="0" max="1000000000000" step="any" inputmode="decimal" required><span id="amount-code" aria-hidden="true">EUR</span></div></div>
               <div class="currency-row"><div class="field"><label for="base">From</label><select id="base" required disabled><option>Loading…</option></select></div><button type="button" class="swap" id="swap" title="Swap currencies" aria-label="Swap currencies">⇄</button><div class="field"><label for="quote">To</label><select id="quote" required disabled><option>Loading…</option></select></div></div>
@@ -65,12 +66,12 @@
           </article>
 
           <article class="panel quote-panel">
-            <div class="panel-heading"><div><div class="eyebrow small">MARKET OVERVIEW</div><h2>Live quote board</h2><p>SiftingIO observations stored by your MFAPIs API.</p></div><a class="icon-button" href="/v1/fx/quotes" target="_blank" rel="noopener" title="Open raw quote JSON" aria-label="Open raw quote JSON">↗</a></div>
+            <div class="panel-heading"><div><div class="eyebrow small">MARKET OVERVIEW</div><h2 id="market-title">Live quote board</h2><p id="market-description">SiftingIO observations stored by your MFAPIs API.</p></div><a class="icon-button" href="/v1/fx/quotes" target="_blank" rel="noopener" title="Open raw quote JSON" aria-label="Open raw quote JSON">↗</a></div>
             <div class="quote-tools">
               <div class="toolbar-note"><span class="pulse-green"></span> <span id="board-caption">Loading recorded quotes…</span></div>
               <div class="refresh-tools"><label class="auto-label"><input id="auto-refresh" type="checkbox" checked> Auto-update view</label><select id="refresh-interval" aria-label="Display refresh interval"><option value="10000">10s</option><option value="15000" selected>15s</option><option value="30000">30s</option><option value="60000">60s</option></select><button id="fetch-latest" type="button" class="refresh-button fetch-button" title="Fetch five new SiftingIO snapshots on demand (uses five provider API calls)">↡ Fetch latest rates</button><button id="refresh" type="button" class="refresh-button" title="Reload saved quotes from the local database">↻ <span>Refresh</span></button></div>
             </div>
-            <div class="quote-table-wrap"><table><thead><tr><th>Currency pair</th><th class="right">Bid</th><th class="right">Ask</th><th class="right">Midpoint</th><th class="center">Freshness</th></tr></thead><tbody id="quote-rows"><tr><td class="no-data" colspan="5">Connecting to your local API…</td></tr></tbody></table></div>
+            <div class="quote-table-wrap"><table><thead><tr><th>Currency pair</th><th class="right" id="th-bid">Bid</th><th class="right" id="th-ask">Ask</th><th class="right" id="th-mid">Midpoint</th><th class="center" id="th-fresh">Freshness</th></tr></thead><tbody id="quote-rows"><tr><td class="no-data" colspan="5">Connecting to your local API…</td></tr></tbody></table></div>
             <div class="board-footer"><span id="threshold-note">Freshness threshold: 120 seconds</span><span>Click a pair to convert</span></div>
             <div class="market-note"><span>DATA REFRESH</span><p>Auto-update rereads your <strong>local MFAPIs database only</strong>, without provider requests. <strong>Fetch latest rates</strong> requests up to five SiftingIO snapshots using your private local server and counts toward API usage. It has a 3-minute cooldown; during market closures, quotes may remain stale.</p></div>
           </article>

@@ -7,7 +7,7 @@ const currencies = {
   CHF:'Swiss Franc',AUD:'Australian Dollar',CAD:'Canadian Dollar',NZD:'New Zealand Dollar',
   SGD:'Singapore Dollar',HKD:'Hong Kong Dollar',CNY:'Chinese Yuan'
 };
-const state = { quotes:[], allowed:[], maxAge:120, timer:null, loading:false, latestError:'', token:0, hasConverted:false };
+const state = { quotes:[], allowed:[], maxAge:120, timer:null, loading:false, latestError:'', token:0, hasConverted:false, historical:false, referenceDate:null, historicalRows:[] };
 const decimal = (value, places=5) => new Intl.NumberFormat('en-US', { maximumFractionDigits:places, minimumFractionDigits:0 }).format(value);
 const money = (value, code) => {
   const number = Number(value);
@@ -67,7 +67,31 @@ function td(value, className='') {
   cell.className = className;
   return cell;
 }
+function renderHistoricalRows() {
+  const tbody=$('quote-rows');
+  tbody.replaceChildren();
+  for(const r of state.historicalRows) {
+    const row=document.createElement('tr');
+    row.dataset.symbol=r.entity;
+    row.tabIndex=0;
+    row.setAttribute('aria-label',`Select ${r.entity} for historical reference conversion`);
+    const pair=td(r.entity,'pair-name');
+    const sub=document.createElement('small');sub.className='pair-sub';sub.textContent='European Central Bank';
+    pair.append(sub);row.append(pair);
+    row.append(td('—','right'));
+    row.append(td('—','right'));
+    row.append(td(decimal(Number(r.value),6),'right price-mid'));
+    const reference=td('','center');
+    const badge=document.createElement('span');badge.className='badge stale';badge.textContent='Daily reference';
+    reference.append(badge);row.append(reference);
+    const choose=()=>{$('base').value='EUR';$('quote').value=r.entity.split('/')[1];$('amount-code').textContent='EUR';convert();};
+    row.addEventListener('click',choose);
+    row.addEventListener('keydown',event=>{if(event.key==='Enter'||event.key===' '){event.preventDefault();choose();}});
+    tbody.append(row);
+  }
+}
 function renderRows() {
+  if(state.historical){renderHistoricalRows();return;}
   const tbody=$('quote-rows');
   tbody.replaceChildren();
   if(!state.quotes.length) {
@@ -105,6 +129,17 @@ function renderRows() {
   }
 }
 function renderStats() {
+  if(state.historical){
+    $('stat-pairs').textContent=String(state.historicalRows.length);
+    $('stat-fresh').textContent='Reference';
+    $('board-caption').textContent='ECB daily reference rates · not live';
+    $('threshold-note').textContent='ECB rates are historical reference values; not bid/ask quotes.';
+    $('stat-observed').textContent=state.referenceDate||'—';
+    $('stat-observed-date').textContent='Latest stored ECB observation date';
+    $('connection-status').textContent='ECB reference data';
+    $('connection-beacon').className='status-beacon';
+    return;
+  }
   const count=state.quotes.filter(fresh).length;
   $('stat-pairs').textContent=String(state.quotes.length);
   $('stat-fresh').textContent=`${count} / ${state.quotes.length}`;
@@ -141,17 +176,80 @@ async function convert() {
       return;
     }
     const params=new URLSearchParams({base,quote,amount});
+    if(state.historical){
+      if(!state.referenceDate)throw new Error('No ECB reference observation available');
+      params.set('on',state.referenceDate);
+    }
     const result=await api('/v1/fx/convert?'+params.toString());
     if(token!==state.token) return;
     $('converted-amount').textContent=money(result.converted_amount,quote);
     $('unit-rate').textContent=`1 ${base} = ${decimal(Number(result.rate),8)} ${quote}`;
     $('conversion-source').textContent=result.source || result.provider || '—';
-    $('conversion-time').textContent=timeLabel(result.as_of);
-    $('conversion-status').textContent=`Fresh (${result.quote_age_seconds ?? '?'}s) · ${result.rate_type==='observed_bid_ask_midpoint'?'bid/ask midpoint':'market quote'}`;
+    if(state.historical){
+      $('conversion-time').textContent=result.observation_date||state.referenceDate;
+      $('conversion-status').textContent='Historical ECB reference · not live';
+    }else{
+      $('conversion-time').textContent=timeLabel(result.as_of);
+      $('conversion-status').textContent=`Fresh (${result.quote_age_seconds ?? '?'}s) · ${result.rate_type==='observed_bid_ask_midpoint'?'bid/ask midpoint':'market quote'}`;
+    }
   } catch(error) {
     if(token!==state.token) return;
-    showConversionError(error.message + '. Fetch newer quotes in your running demo if needed.');
+    showConversionError(error.message + (state.historical ? '. Choose a currency with an ECB observation for the selected date.' : '. Fetch newer quotes in your running demo if needed.'));
   } finally { if(token===state.token)$('convert').disabled=false; }
+}
+async function loadECBReference() {
+  const catalogue=await api('/v1/catalogue');
+  const ecb=catalogue.datasets?.find(group=>group.source==='ecb');
+  if(!ecb || !/^\d{4}-\d{2}-\d{2}$/.test(ecb.last_date||'')) {
+    throw new Error('ECB historical dataset is not available');
+  }
+  const date=ecb.last_date;
+  const params=new URLSearchParams({source:'ecb',start:date,end:date,limit:'1000'});
+  const observations=await api('/v1/observations?'+params.toString());
+  const available=(observations.data||[]).filter(r=>
+    /^EUR\/[A-Z]{3}$/.test(r.entity||'') && r.entity!=='EUR/EUR' &&
+    r.value!==null && Number.isFinite(Number(r.value)) && Number(r.value)>0
+  ).map(r=>({entity:r.entity,value:r.value,observation_date:date}));
+  if(!available.length)throw new Error('No ECB rates found for the latest observation date');
+  state.historical=true;
+  state.referenceDate=date;
+  state.historicalRows=available;
+  state.quotes=[];
+  state.allowed=['EUR',...new Set(available.map(r=>r.entity.split('/')[1]))];
+  state.latestError='';
+  $('mode-note').hidden=false;
+  $('mode-note').textContent=`Historical reference mode · ${date}. Live SiftingIO prices are available only in the private local demo. This public view uses ECB reference observations, not current market bid/ask quotes.`;
+  $('market-title').textContent='ECB reference rate board';
+  $('market-description').textContent='Daily reference rates from the European Central Bank. No live data feed is connected to this public service.';
+  $('converter-description').textContent='Calculate using the latest stored ECB daily reference rates.';
+  $('fetch-latest').hidden=true;
+  $('th-bid').textContent='Bid (n/a)';
+  $('th-ask').textContent='Ask (n/a)';
+  $('th-mid').textContent='ECB rate';
+  $('th-fresh').textContent='Type';
+  $('auto-refresh').checked=false;
+  $('auto-refresh').disabled=true;
+  clearInterval(state.timer);
+  fillCurrencies();renderRows();renderStats();
+  $('last-checked').textContent='Checked '+new Date().toLocaleTimeString();
+  showAlert('');
+  await convert();
+}
+function clearReferenceMode(){
+  if(!state.historical)return;
+  state.historical=false;
+  state.referenceDate=null;
+  state.historicalRows=[];
+  $('mode-note').hidden=true;
+  $('market-title').textContent='Live quote board';
+  $('market-description').textContent='SiftingIO observations stored by your MFAPIs API.';
+  $('converter-description').textContent='Calculate using the latest valid midpoint rate.';
+  $('fetch-latest').hidden=false;
+  $('th-bid').textContent='Bid';
+  $('th-ask').textContent='Ask';
+  $('th-mid').textContent='Midpoint';
+  $('th-fresh').textContent='Freshness';
+  $('auto-refresh').disabled=false;
 }
 async function refreshQuotes() {
   if(state.loading) return;
@@ -165,13 +263,21 @@ async function refreshQuotes() {
     state.quotes=quotes.quotes.filter(q=>q && typeof q.symbol==='string' && /^[A-Z]{3}\/[A-Z]{3}$/.test(q.symbol));
     state.allowed=Array.isArray(capabilities.currencies) ? capabilities.currencies.map(c=>c.code).filter(c=>/^[A-Z]{3}$/.test(c)) : [];
     state.maxAge=Number(capabilities.max_quote_age_seconds)||120;
+    clearReferenceMode();
     state.latestError='';
     fillCurrencies();renderRows();renderStats();showAlert('');
     $('last-checked').textContent='Checked ' + new Date().toLocaleTimeString();
     await convert();
   }catch(error){
-    state.latestError=error.message;
-    showAlert('Unable to read local Forex data: '+error.message+'. Start your local MFAPIs demo or check its configuration.');
+    if(/quote listing is not available until an authorized feed is configured/i.test(error.message)){
+      try{await loadECBReference();return;}catch(referenceError){
+        state.latestError=referenceError.message;
+        showAlert('Live Forex is not configured on this public service, and historical ECB data could not be loaded: '+referenceError.message);
+      }
+    }else{
+      state.latestError=error.message;
+      showAlert('Unable to read Forex data: '+error.message+'. Please retry after the service starts.');
+    }
     setConnection('Data unavailable','bad');
     $('board-caption').textContent='Local API unavailable';
     showConversionError('No live data from the local API.');
@@ -179,7 +285,7 @@ async function refreshQuotes() {
 }
 function schedule() {
   clearInterval(state.timer);
-  if($('auto-refresh').checked) {
+  if($('auto-refresh').checked && !state.historical) {
     state.timer=setInterval(()=>{if(!document.hidden)refreshQuotes();},Number($('refresh-interval').value)||15000);
   }
 }
@@ -191,6 +297,7 @@ $('amount').addEventListener('input',()=>{clearTimeout(debounce);debounce=setTim
 $('swap').addEventListener('click',()=>{const b=$('base').value;$('base').value=$('quote').value;$('quote').value=b;$('amount-code').textContent=$('base').value;convert();});
 let providerRefreshing=false;
 async function fetchLatestRates(){
+  if(state.historical){showAlert('Provider fetching is available only on the private local SiftingIO demo. This public page uses ECB daily historical rates.');return;}
   if(providerRefreshing)return;
   providerRefreshing=true;
   const button=$('fetch-latest');
@@ -221,6 +328,6 @@ $('fetch-latest').addEventListener('click',fetchLatestRates);
 $('refresh').addEventListener('click',refreshQuotes);
 $('auto-refresh').addEventListener('change',schedule);
 $('refresh-interval').addEventListener('change',schedule);
-document.addEventListener('visibilitychange',()=>{if(!document.hidden)refreshQuotes();});
+document.addEventListener('visibilitychange',()=>{if(!document.hidden && !state.historical)refreshQuotes();});
 setInterval(()=>{if(state.quotes.length){renderRows();renderStats();}},1000);
 refreshQuotes();schedule();
