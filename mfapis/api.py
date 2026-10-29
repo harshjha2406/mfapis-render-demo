@@ -24,9 +24,14 @@ from .db import connect, json_record, observations
 
 @asynccontextmanager
 async def lifespan(app):
+    from . import sifting_stream
     stop = refresh.start_worker()
-    yield
-    stop.set()
+    stream_stop = sifting_stream.start_worker()
+    try:
+        yield
+    finally:
+        stream_stop.set()
+        stop.set()
 
 
 app = FastAPI(title="MFAPIs Financial Data Explorer", version="0.5.0", lifespan=lifespan,
