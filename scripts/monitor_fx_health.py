@@ -35,6 +35,24 @@ def market_open():
     # Approximate weekday daily maintenance break
     return not (16 * 60 + 59 <= minute < 17 * 60 + 5)
 
+def desktop_notify(message):
+    try:
+        result = subprocess.run(
+            [
+                "osascript",
+                "-e",
+                f'display notification "{message}" with title "MFAPIs Monitor"'
+            ],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        if result.returncode != 0:
+            print("Notification error:", result.stderr.strip())
+    except (OSError, subprocess.TimeoutExpired) as error:
+        print("Notification unavailable:", error)
+
+
 failures = 0
 
 print("MFAPIs automatic monitor started.", flush=True)
@@ -75,13 +93,15 @@ try:
             if status == "PASS":
                 if failures:
                     print("RECOVERED: Health check is passing.")
+                    desktop_notify("Forex data feed recovered")
                 failures = 0
             else:
                 failures += 1
                 print("Consecutive failures:", failures)
 
-                if failures >= 3:
+                if failures == 3:
                     print("ALERT: FX data health check is failing!")
+                    desktop_notify("Three consecutive FX health checks failed")
 
         with LOG.open("a") as file:
             file.write(json.dumps({
