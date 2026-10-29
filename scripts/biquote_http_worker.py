@@ -1,6 +1,7 @@
 import os
 import time
 import math
+from itertools import count
 from datetime import datetime, timezone
 
 import requests
@@ -15,7 +16,18 @@ PAIRS = {
     "AUDUSD": "AUD/USD",
 }
 
-API_URL = "http://127.0.0.1:8002"
+API_URL = os.getenv(
+    "MFAPIS_API_URL",
+    "http://127.0.0.1:8002"
+).rstrip("/")
+
+MAX_CYCLES = int(os.getenv("MFAPIS_MAX_CYCLES", "2"))
+INTERVAL_SECONDS = int(
+    os.getenv("MFAPIS_INTERVAL_SECONDS", "15")
+)
+
+if MAX_CYCLES < 0 or INTERVAL_SECONDS < 5:
+    raise SystemExit("Invalid worker configuration")
 KEY = os.getenv("MFAPIS_INGEST_KEY", "")
 
 if len(KEY) < 32:
@@ -73,8 +85,8 @@ with requests.Session() as provider, requests.Session() as mfapis:
         HTTPAdapter(max_retries=retry)
     )
 
-    for cycle in range(1, 3):
-        print(f"\n========== HTTP CYCLE {cycle}/2 ==========",
+    for cycle in (count(1) if MAX_CYCLES == 0 else range(1, MAX_CYCLES + 1)):
+        print(f"\n========== HTTP CYCLE {cycle} ==========",
               flush=True)
 
         try:
@@ -132,7 +144,7 @@ with requests.Session() as provider, requests.Session() as mfapis:
         except Exception as error:
             print("Batch fetch failed:", error)
 
-        if cycle < 2:
-            time.sleep(15)
+        if MAX_CYCLES == 0 or cycle < MAX_CYCLES:
+            time.sleep(INTERVAL_SECONDS)
 
 print("\nStandalone HTTP worker test completed.")
