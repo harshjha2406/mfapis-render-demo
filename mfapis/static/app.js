@@ -6,11 +6,11 @@ const config = {
   ecb:{name:'Foreign exchange',provider:'EUROPEAN CENTRAL BANK',title:'Exchange-rate history',description:'Daily reference rates: units of the selected currency per one euro.',label:'Currency pair',frequency:'Daily reference',default:'EUR/USD',url:'https://www.ecb.europa.eu/stats/policy_and_exchange_rates/euro_reference_exchange_rates/html/index.en.html',note:'Source data are available free from the ECB. MFAPIs normalizes these observations. Informational reference rates are not executable trading prices.'},
   treasury:{name:'Treasury yields',provider:'U.S. DEPARTMENT OF THE TREASURY',title:'Treasury yield history',description:'Daily nominal par yields for a selected U.S. Treasury maturity.',label:'Maturity',frequency:'Daily',default:'par_yield_10Y',url:'https://home.treasury.gov/resource-center-data-chart-center/interest-rates',note:'Values are annual percentages: 4.2 means 4.2%. These are nominal par curve observations, not individual bond prices or zero-coupon yields.'}
 };
-let source='worldbank', datasets={}, rows=[], tablePage=0, nextOffset=null, requestId=0, query='';
+let source='ecb', datasets={}, rows=[], tablePage=0, nextOffset=null, requestId=0, query='';
 const fmt=(x,d=4)=>Number(x).toLocaleString('en-US',{maximumFractionDigits:d});
 const displayDate=s=>s ? new Date(s.slice(0,10)+'T00:00:00Z').toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric',timeZone:'UTC'}) : '—';
 function message(id,text){$(id).textContent=text;$(id).hidden=!text;}
-async function get(url){const response=await fetch(url,{headers:{Accept:'application/json'}});const result=await response.json();if(!response.ok)throw new Error(typeof result.detail==='string'?result.detail:'The request could not be completed. Check the selected values.');return result;}
+async function get(url){const response=await fetch(url,{headers:{Accept:'application/json'}});const result=await response.json();if(!response.ok){const error=new Error(typeof result.detail==='string'?result.detail:'The request could not be completed. Check the selected values.');error.retryAfter=Number(response.headers.get('Retry-After')||0);throw error;}return result;}
 function option(value,label){const o=document.createElement('option');o.value=value;o.textContent=label;return o;}
 function seriesTitle(s){if(source==='worldbank')return names[s.entity]||s.entity;if(source==='ecb')return s.entity;const code=s.metric.replace('par_yield_','');return code.replace(/M$/,' month').replace(/Y$/,' year');}
 function unitLabel(unit){if(unit==='percent_yoy')return '% annual growth';if(unit==='percent_per_year')return '% per year';return unit.replace('_per_EUR',' per EUR');}
@@ -25,7 +25,7 @@ function selectSource(next){
   if(!d){message('series-error','This dataset is not yet available.');clearData('No observations available.');return;}
   $('source-count').textContent=fmt(d.count,0);$('coverage').textContent=d.first_date.slice(0,4)+'–'+d.last_date.slice(0,4);
   $('coverage-dates').textContent=displayDate(d.first_date)+' – '+displayDate(d.last_date);
-  $('retrieval-date').textContent=displayDate(d.last_retrieved_at);$('attribution').textContent=d.attribution;
+  $('retrieval-date').textContent=displayDate(d.last_retrieved_at);renderRefreshStatus();$('attribution').textContent=d.attribution;
   let series=[...d.series];if(source==='treasury')series.sort((a,b)=>tenor(a.metric)-tenor(b.metric));
   series.forEach(s=>{const o=option(s.entity+'|'+s.metric,seriesTitle(s));if(s.entity===c.default||s.metric===c.default)o.selected=true;$('series').append(o);});
   $('start').value=d.first_date;$('end').value=d.last_date;
@@ -89,15 +89,104 @@ $('filters').addEventListener('submit',e=>{e.preventDefault();loadSeries();});
 $('previous').addEventListener('click',()=>{tablePage--;renderTable();});$('next').addEventListener('click',()=>{tablePage++;renderTable();});
 $('load-more').addEventListener('click',()=>loadSeries(true));
 document.querySelectorAll('.tab').forEach(b=>b.addEventListener('click',()=>selectSource(b.dataset.source)));
-$('converter').addEventListener('submit',async e=>{e.preventDefault();const button=e.submitter;button.disabled=true;message('conversion-error','');$('conversion-result').textContent='Calculating…';try{const params=new URLSearchParams({base:$('base').value,quote:$('quote').value,amount:$('amount').value,on:$('conversion-date').value});const r=await get('/v1/fx/convert?'+params);$('conversion-result').textContent=`${fmt(r.amount,4)} ${r.base} = ${fmt(r.converted_amount,2)} ${r.quote}`;const small=document.createElement('small');small.textContent=`1 ${r.base} = ${fmt(r.rate,6)} ${r.quote} · ${displayDate(r.observation_date)} · Calculated by MFAPIs from ECB reference rates`;$('conversion-result').append(small);}catch(error){$('conversion-result').textContent='Conversion unavailable for this request.';message('conversion-error',error.message);}finally{button.disabled=false;}});
+let fxCapabilities=null, historyRefresh={}, fxToken=0, fxBusy=false, fxTimer=null, retryAt=0;
+const currencyNames=typeof Intl.DisplayNames==='function'?new Intl.DisplayNames(['en'],{type:'currency'}):null;
+const currencyLabel=c=>c+' · '+(currencyNames?.of(c)||c);
+function mode(){return $('fx-mode').value;}
+function availableCurrencies(){return mode()==='latest'?(fxCapabilities?.currencies.map(c=>c.code)||[]):[...new Set(['EUR',...(datasets.ecb?.series.map(s=>s.entity.split('/')[1])||[])])].sort();}
+function quoteOptions(preferred){
+  const base=$('base').value;
+  let codes=availableCurrencies();
+  if(mode()==='latest')codes=codes.filter(c=>c!==base&&fxCapabilities.pairs.some(p=>p===base+'/'+c||p===c+'/'+base));
+  $('quote').replaceChildren(...codes.map(c=>option(c,currencyLabel(c))));
+  if(codes.includes(preferred))$('quote').value=preferred;
+  $('quote').disabled=!codes.length;
+}
+function configureCurrencies(base='USD',quote='INR'){
+  const codes=availableCurrencies();$('base').replaceChildren(...codes.map(c=>option(c,currencyLabel(c))));
+  if(codes.includes(base))$('base').value=base;
+  quoteOptions(quote);$('base').disabled=!codes.length;$('convert-button').disabled=!codes.length;
+}
+function invalidateFX(){fxToken++;fxBusy=false;clearTimeout(fxTimer);$('conversion-result').textContent='Selection changed. Request a rate for these currencies.';$('conversion-json').textContent='No result for the current selection.';$('fx-updated').textContent='Provider timestamp will appear with the result.';$('fx-status').textContent=mode()==='latest'?'Latest quote':'Historical reference';$('fx-status').classList.remove('warning');message('conversion-error','');$('convert-button').disabled=!$('base').value;}
+function scheduleFX(delay=60000){clearTimeout(fxTimer);if(mode()==='latest'&&$('auto-refresh').checked)fxTimer=setTimeout(()=>{if(!document.hidden&&source==='ecb')convertFX();else scheduleFX(delay);},Math.max(delay,retryAt-Date.now()));}
+async function convertFX(){
+  if(fxBusy||!$('converter').reportValidity())return;
+  if(Date.now()<retryAt){message('conversion-error','Please wait for the retry delay before requesting another quote.');scheduleFX();return;}
+  const token=++fxToken;fxBusy=true;clearTimeout(fxTimer);$('convert-button').disabled=true;
+  message('conversion-error','');$('conversion-result').classList.remove('unavailable');$('conversion-result').textContent='Requesting rate…';
+  const requestedMode=mode();
+  const params=new URLSearchParams({base:$('base').value,quote:$('quote').value,amount:$('amount').value});
+  if(requestedMode==='historical')params.set('on',$('conversion-date').value);
+  const url='/v1/fx/convert?'+params;
+  $('fx-json-link').href=url;
+  try{
+    const r=await get(url);if(token!==fxToken)return;
+    $('conversion-result').textContent=`${fmt(r.amount,4)} ${r.base} = ${fmt(r.converted_amount,2)} ${r.quote}`;
+    const small=document.createElement('small');small.textContent=`1 ${r.base} = ${fmt(r.rate,8)} ${r.quote}`;$('conversion-result').append(small);
+    $('conversion-json').textContent=JSON.stringify(r,null,2);$('fx-status').classList.remove('warning');
+    if(requestedMode==='latest'){
+      $('fx-status').textContent=r.cached?'Latest · cached':'Latest · fetched';
+      $('fx-updated').textContent=`Rate observed: ${new Date(r.as_of).toLocaleString()} · Age at request: ${r.quote_age_seconds}s · Retrieved: ${new Date(r.fetched_at).toLocaleString()}`;
+      scheduleFX(Math.max(60000,(fxCapabilities?.refresh_seconds||60)*1000));
+    }else{$('fx-status').textContent='Historical reference';$('fx-updated').textContent='ECB observation date: '+displayDate(r.observation_date);}
+  }catch(error){if(token!==fxToken)return;
+    $('conversion-result').textContent='No current conversion available for this request.';$('conversion-result').classList.add('unavailable');
+    $('conversion-json').textContent=JSON.stringify({error:error.message},null,2);$('fx-updated').textContent='No successful quote for the current request.';
+    $('fx-status').textContent='Unavailable';$('fx-status').classList.add('warning');message('conversion-error',error.message);
+    retryAt=Date.now()+Math.max(0,error.retryAfter||0)*1000;scheduleFX(Math.max(60000,(error.retryAfter||0)*1000));
+  }finally{if(token===fxToken){fxBusy=false;$('convert-button').disabled=false;}}
+}
+$('converter').addEventListener('submit',e=>{e.preventDefault();convertFX();});
+$('base').addEventListener('change',()=>{const prior=$('quote').value;invalidateFX();quoteOptions(prior);});
+for(const id of ['quote','amount','conversion-date'])$(id).addEventListener('input',invalidateFX);
+$('swap').addEventListener('click',()=>{const base=$('base').value,quote=$('quote').value;invalidateFX();configureCurrencies(quote,base);convertFX();});
+$('auto-refresh').addEventListener('change',()=>{clearTimeout(fxTimer);if($('auto-refresh').checked)scheduleFX();});
+$('fx-mode').addEventListener('change',()=>{
+  const base=$('base').value,quote=$('quote').value;invalidateFX();configureCurrencies(base,quote);
+  const historical=mode()==='historical';$('conversion-date-label').hidden=!historical;$('conversion-date').required=historical;$('auto-refresh').disabled=historical;
+  $('convert-button').textContent=historical?'Convert on this date →':'Get latest rate →';
+  $('converter-description').textContent=historical?'Cross-rates calculated from stored ECB daily reference rates.':'Latest provider quotes, with the time each rate was observed.';
+  $('fx-attribution').hidden=historical;
+  $('fx-note').textContent=historical?'Source: European Central Bank. Exact observation date; no hidden carry-forward for weekends or holidays. Informational rates only.':'Data provided by Twelve Data. Old or unavailable quotes will not be presented as current. Not an executable trading price.';
+  convertFX();
+});
+async function initFX(){
+  try{fxCapabilities=await get('/v1/fx/currencies');configureCurrencies();
+    $('auto-refresh').parentNode.lastChild.textContent=' Refresh every '+fxCapabilities.refresh_seconds+' seconds';
+    if(!fxCapabilities.configured){$('fx-status').textContent='Setup required';$('conversion-result').textContent='Latest rates need the server’s Twelve Data key. Historical ECB conversion is still available.';return;}
+    convertFX();
+  }catch(error){message('conversion-error',error.message);$('fx-status').textContent='Unavailable';}
+}
 async function init(){
   try{const result=await get('/v1/catalogue');datasets=Object.fromEntries(result.datasets.map(d=>[d.source,d]));if(!Object.keys(config).every(s=>datasets[s]))throw new Error('Dataset initialization is incomplete. Please retry shortly.');
     $('total-count').textContent=fmt(result.datasets.reduce((n,d)=>n+d.count,0),0);$('connection').textContent='Database connected';
-    const currencies=[...new Set(['EUR',...datasets.ecb.series.map(s=>s.entity.split('/')[1])])].sort();
-    for(const id of ['base','quote']){currencies.forEach(c=>$(id).append(option(c,c)));}
-    $('base').value='USD';$('quote').value='INR';$('conversion-date').value=datasets.ecb.last_date;
-    selectSource('worldbank');
+    historyRefresh=result.refresh||{};$('conversion-date').value=datasets.ecb.last_date;
+    selectSource('ecb');
   }catch(error){$('connection').textContent='Data unavailable';message('global-error',error.message+' Refresh this page after the service finishes starting.');clearData('Waiting for the database.');}
 }
 init();
+initFX();
 window.addEventListener('resize',()=>{if(rows.length)renderChart();});
+
+function renderRefreshStatus(){
+  const r=historyRefresh[source];
+  $('refresh-status').textContent=r?(r.status==='error'?'Last refresh failed; stored observations retained.':r.status==='running'?'Checking for source updates…':'Last successful check: '+new Date(r.last_success_at*1000).toLocaleString()):'Retrieval date, not publication date';
+}
+async function pollCatalogue(){
+  if(document.hidden)return;
+  try{
+    const result=await get('/v1/catalogue'),old=datasets[source];
+    const updated=Object.fromEntries(result.datasets.map(d=>[d.source,d]));
+    historyRefresh=result.refresh||{};datasets=updated;renderRefreshStatus();
+    $('total-count').textContent=fmt(result.datasets.reduce((n,d)=>n+d.count,0),0);
+    const d=datasets[source];if(!d)return;
+    $('source-count').textContent=fmt(d.count,0);$('coverage').textContent=d.first_date.slice(0,4)+'–'+d.last_date.slice(0,4);
+    $('coverage-dates').textContent=displayDate(d.first_date)+' – '+displayDate(d.last_date);$('retrieval-date').textContent=displayDate(d.last_retrieved_at);
+    if(old&&old.last_retrieved_at!==d.last_retrieved_at){
+      if($('end').value===old.last_date)$('end').value=d.last_date;
+      if($('conversion-date').value===old.last_date&&source==='ecb')$('conversion-date').value=d.last_date;
+      loadSeries();
+    }
+  }catch(error){$('refresh-status').textContent='Could not check for new records. Displayed records may be out of date.';}
+}
+setInterval(pollCatalogue,60000);

@@ -1,7 +1,11 @@
-"""Read-only historical-data dashboard and API; commercial auth is a later layer."""
+"""Latest FX quotes plus normalized historical datasets."""
 import os
+import time
+import threading
+from contextlib import asynccontextmanager
+from uuid import uuid4
 from datetime import date
-from decimal import Decimal
+from decimal import Decimal, localcontext
 from typing import Literal
 from pathlib import Path
 
@@ -12,10 +16,69 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from .connectors import ATTRIBUTIONS
+from . import fx, refresh
 from .db import connect, json_record, observations
 
-app = FastAPI(title="MFAPIs Financial Data Explorer", version="0.2.0",
-              description="Real historical data from World Bank, ECB and US Treasury. Not a real-time feed.")
+@asynccontextmanager
+async def lifespan(app):
+    stop = refresh.start_worker()
+    yield
+    stop.set()
+
+
+app = FastAPI(title="MFAPIs Financial Data Explorer", version="0.3.0", lifespan=lifespan,
+              description="Latest FX quotes from Twelve Data, with provider timestamps and bounded caching. Historical ECB reference rates, World Bank GDP and US Treasury yields are separate datasets.")
+
+
+@app.exception_handler(fx.FXError)
+async def fx_failure(request, exc):
+    return JSONResponse(status_code=exc.status,
+        content={"detail":exc.message,"error":{"code":exc.code,"message":exc.message},"request_id":getattr(request.state,"request_id",None)},
+        headers={"Retry-After":str(exc.retry_after)} if exc.retry_after else {})
+
+
+# Basic single-process edge protection for this demonstration. The durable provider
+# budget protects paid upstream usage across replicas. Commercial tenant quotas need
+# authenticated keys and a shared rate limiter at the gateway.
+_clients = {}
+_clients_lock = threading.Lock()
+
+
+@app.middleware("http")
+async def request_controls(request, call_next):
+    request.state.request_id=uuid4().hex
+    if request.url.path in {"/v1/exchange-rate", "/v1/fx/convert"}:
+        now=int(time.time()); host=request.client.host if request.client else "unknown"
+        with _clients_lock:
+            expired=[k for k,v in _clients.items() if v[0]!=now//60]
+            for k in expired: del _clients[k]
+            window,count=_clients.get(host,(now//60,0))
+            if count>=60 or (host not in _clients and len(_clients)>=10000):
+                return JSONResponse(status_code=429,content={"detail":"Too many requests. Retry shortly.","request_id":request.state.request_id},headers={"Retry-After":str(60-now%60)})
+            _clients[host]=(window,count+1)
+    result=await call_next(request)
+    result.headers["X-Request-ID"]=request.state.request_id
+    result.headers["X-Content-Type-Options"]="nosniff"
+    result.headers["Referrer-Policy"]="strict-origin-when-cross-origin"
+    if request.url.path=="/" or request.url.path.startswith("/v1/"):
+        result.headers["Cache-Control"]="no-store"
+    if request.url.path=="/":
+        result.headers["Content-Security-Policy"]="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
+    return result
+
+
+@app.get("/v1/fx/currencies")
+def currencies():
+    return fx.capabilities()
+
+
+@app.get("/v1/exchange-rate")
+def exchange_rate(symbol: str = Query(pattern="^[A-Z]{3}/[A-Z]{3}$")):
+    db=engine()
+    try: return fx.latest(db,symbol)
+    finally: db.dispose()
+
+
 STATIC = Path(__file__).parent / "static"
 app.mount("/assets", StaticFiles(directory=STATIC), name="assets")
 
@@ -57,9 +120,12 @@ def catalogue():
             instruments = conn.execute(select(observations.c.source, observations.c.entity,
                 observations.c.metric, observations.c.unit).distinct().order_by(
                 observations.c.source, observations.c.entity, observations.c.metric)).mappings().all()
+            refresh_rows = conn.execute(select(refresh.status)).mappings().all()
         return {"datasets": [{**json_record(g), "attribution": ATTRIBUTIONS[g["source"]],
                 "series": [dict(i) for i in instruments if i["source"] == g["source"]]} for g in groups],
-                "note": "Real historical source data. Not a real-time feed; no automatic refresh is scheduled."}
+                "refresh": {r["source"]:dict(r) for r in refresh_rows},
+                "automatic_refresh_enabled":os.getenv("AUTO_REFRESH_HISTORY","false").lower()=="true",
+                "note": "Historical source observations; daily or annual frequency. Separate latest FX endpoints use Twelve Data. History refresh checks run while the service is awake when enabled."}
     finally:
         db.dispose()
 
@@ -99,7 +165,18 @@ def series(source: Literal["worldbank", "ecb", "treasury"], entity: str | None =
 
 @app.get("/v1/fx/convert")
 def convert(base: str = Query(pattern="^[A-Z]{3}$"), quote: str = Query(pattern="^[A-Z]{3}$"),
-            on: date = Query(), amount: Decimal = Query(ge=0)):
+            amount: Decimal = Query(ge=0,le=Decimal("1000000000000"),max_digits=24,decimal_places=12), on: date | None = None):
+    if on is None:
+        db=engine()
+        try:
+            result=fx.latest(db,base+"/"+quote)
+            with localcontext() as ctx:
+                ctx.prec=60
+                converted=amount*Decimal(result["rate"])
+            return {**result,"base":base,"quote":quote,"amount":str(amount),"converted_amount":str(converted)}
+        finally: db.dispose()
+    if on>date.today():
+        raise HTTPException(400,"Historical observation date cannot be in the future")
     # Exact observation date, no weekend carry-forward hidden from clients.
     db = engine()
     try:
@@ -115,6 +192,6 @@ def convert(base: str = Query(pattern="^[A-Z]{3}$"), quote: str = Query(pattern=
         rate = rates[quote] / rates[base]
         return {"base": base, "quote": quote, "observation_date": str(on), "rate": str(rate),
                 "amount": str(amount), "converted_amount": str(amount * rate),
-                "modified": "Cross-rate and amount calculated by MFAPIs", "attribution": ATTRIBUTIONS["ecb"]}
+                "mode":"historical", "provider":"ecb", "modified": "Cross-rate and amount calculated by MFAPIs", "attribution": ATTRIBUTIONS["ecb"]}
     finally:
         db.dispose()

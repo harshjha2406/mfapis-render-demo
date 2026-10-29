@@ -15,6 +15,7 @@ from sqlalchemy import func, select, text
 from .connectors import row
 from .db import KEY, connect, json_record, observations, revisions, watermarks
 from .http import emit
+from . import fx, refresh  # Register additive schema tables before connect().
 
 ROOT = Path(__file__).resolve().parent.parent
 

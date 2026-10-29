@@ -9,24 +9,41 @@
 <body>
 <aside class="sidebar">
   <a class="brand" href="/"><span class="brand-mark">M</span> MFAPIs<span class="brand-dot">.</span></a>
-  <div class="workspace-label">RESEARCH WORKSPACE</div>
+  <div class="workspace-label">FINANCIAL DATA WORKSPACE</div>
   <nav aria-label="Datasets" class="tabs">
     <button data-source="worldbank" class="tab active" aria-pressed="true"><span class="tab-icon">M</span><span>Macroeconomics<small>World Bank</small></span></button>
-    <button data-source="ecb" class="tab" aria-pressed="false"><span class="tab-icon">FX</span><span>Foreign exchange<small>European Central Bank</small></span></button>
+    <button data-source="ecb" class="tab" aria-pressed="false"><span class="tab-icon">FX</span><span>Foreign exchange<small>Latest rates &amp; ECB history</small></span></button>
     <button data-source="treasury" class="tab" aria-pressed="false"><span class="tab-icon">Y</span><span>Treasury yields<small>U.S. Treasury</small></span></button>
   </nav>
-  <div class="sidebar-bottom"><div class="eyebrow">BUILT FOR EXPLORATION</div><p>Three sources.<br>One consistent data format.</p><a href="/docs" target="_blank" rel="noopener">Explore the API ↗</a></div>
+  <div class="sidebar-bottom"><div class="eyebrow">BUILT FOR EXPLORATION</div><p>Latest FX quotes.<br>Traceable historical data.</p><a href="/docs" target="_blank" rel="noopener">Explore the API ↗</a></div>
 </aside>
 <main>
   <header class="topbar"><span>DATA EXPLORER <span class="slash">/</span> <span id="breadcrumb">Macroeconomics</span></span><span class="status" id="connection">Connecting…</span></header>
   <section class="heading"><div><div class="eyebrow">MFAPIs / FINANCIAL DATA</div><h1>Real data. Clear context.</h1><p>Explore economic growth, exchange rates and government yields.</p></div><a href="/docs" class="button secondary api-link" target="_blank" rel="noopener">API documentation ↗</a></section>
-  <div class="notice"><span class="notice-dot"></span><div><strong>Historical data demonstration</strong><span>Real source observations, initially covering 2024–2025. Not a real-time feed. No automatic refresh is scheduled.</span></div></div>
+  <div class="notice"><span class="notice-dot"></span><div><strong>Know when your data was observed</strong><span>Latest FX uses Twelve Data quotes with provider timestamps. Historical charts use daily ECB/Treasury and annual World Bank observations.</span></div></div>
   <div id="global-error" class="error" role="alert" hidden></div>
+  <section id="converter-panel" class="panel fx-panel">
+    <div class="panel-heading"><div><div class="eyebrow">CURRENCY EXCHANGE</div><h2>Currency converter</h2><p id="converter-description">Latest provider quotes, with the time each rate was observed.</p></div><span class="pill" id="fx-status">Connecting…</span></div>
+    <div class="fx-controls"><label>Rate mode<select id="fx-mode"><option value="latest">Latest · Twelve Data</option><option value="historical">Historical · ECB daily reference</option></select></label><label class="check-label"><input id="auto-refresh" type="checkbox" checked> Refresh every 60 seconds</label><button type="button" id="swap" class="button secondary" aria-label="Swap currencies">Swap currencies ⇄</button></div>
+    <form id="converter" class="converter-form">
+      <label>Amount<input id="amount" type="number" min="0" max="1000000000000" step="any" value="100" required></label>
+      <label>From currency<select id="base" required disabled></select></label>
+      <label>To currency<select id="quote" required disabled></select></label>
+      <label id="conversion-date-label" hidden>Observation date<input id="conversion-date" type="date"></label>
+      <button id="convert-button" class="button" type="submit" disabled>Get latest rate →</button>
+    </form>
+    <div id="conversion-error" class="error" role="alert" hidden></div>
+    <div id="conversion-result" class="conversion-result" aria-live="polite">Loading supported currencies…</div>
+    <div class="fx-meta"><span id="fx-updated">Provider timestamp will appear with the result.</span><a id="fx-json-link" href="/v1/exchange-rate?symbol=USD/INR" target="_blank" rel="noopener">View rate JSON ↗</a></div>
+    <p id="fx-note" class="chart-note">A latest quote can stay unchanged between provider updates. Values are informational, not executable trading prices. Old or unavailable quotes will not be presented as current.</p>
+    <p class="chart-note" id="fx-attribution">Data provided by <a href="https://twelvedata.com" target="_blank" rel="noopener">Twelve Data</a>. Conversion calculated by MFAPIs.</p>
+    <details class="fx-json"><summary>Inspect conversion response</summary><pre id="conversion-json">No conversion requested yet.</pre></details>
+  </section>
   <section class="stats" aria-label="Dataset overview">
-    <article><span>Total observations</span><strong id="total-count">—</strong><small>Across the stored datasets</small></article>
+    <article><span>Stored historical observations</span><strong id="total-count">—</strong><small>Across the stored datasets</small></article>
     <article><span>Selected dataset</span><strong id="source-count">—</strong><small id="source-label">Loading source…</small></article>
     <article><span>Observation coverage</span><strong id="coverage">—</strong><small id="coverage-dates">Dates from stored records</small></article>
-    <article><span>Latest source retrieval</span><strong id="retrieval-date">—</strong><small>Retrieval date, not publication date</small></article>
+    <article><span>Latest source retrieval</span><strong id="retrieval-date">—</strong><small id="refresh-status">Retrieval date, not publication date</small></article>
   </section>
   <section class="panel explorer">
     <div class="panel-heading"><div><div class="eyebrow" id="dataset-provider">WORLD BANK</div><h2 id="dataset-title">GDP growth</h2><p id="dataset-description">Annual percentage change in gross domestic product.</p></div><span class="pill" id="frequency">Annual</span></div>
@@ -45,20 +62,7 @@
     <div class="pagination"><span id="table-page">—</span><div><button id="previous" class="button secondary" disabled>← Previous</button><button id="next" class="button secondary" disabled>Next →</button></div></div>
     <button id="load-more" class="button secondary" hidden>Load next 1,000 observations</button>
   </section>
-  <section id="converter-panel" class="panel" hidden>
-    <div class="panel-heading"><div><div class="eyebrow">REFERENCE RATE CALCULATION</div><h2>Currency converter</h2><p>Cross-rates derived from the ECB’s EUR reference rates.</p></div><span class="pill">Exact date</span></div>
-    <form id="converter" class="converter-form">
-      <label>Amount<input id="amount" type="number" min="0" step="any" value="100" required></label>
-      <label>From<select id="base" required></select></label>
-      <label>To<select id="quote" required></select></label>
-      <label>Observation date<input id="conversion-date" type="date" required></label>
-      <button class="button" type="submit">Convert →</button>
-    </form>
-    <div id="conversion-error" class="error" role="alert" hidden></div>
-    <div id="conversion-result" class="conversion-result" aria-live="polite">Choose currencies and a date, then select Convert.</div>
-    <p class="chart-note">Informational reference rates, not executable trading quotes. Weekends, holidays and unavailable currencies can return no data. No automatic carry-forward.</p>
-  </section>
   <section class="panel provenance"><div><div class="eyebrow">TRACEABLE BY DESIGN</div><h2>Source &amp; provenance</h2><p id="attribution">Loading attribution…</p><p id="source-note" class="muted"></p><a id="source-link" href="https://data.worldbank.org" target="_blank" rel="noopener">Visit original source ↗</a></div><details><summary>Inspect a normalized record</summary><pre id="record-json">Select a dataset to inspect a record.</pre></details></section>
-  <footer><span>MFAPIs · Research &amp; engineering demonstration</span><span>Source attribution travels with every record.</span></footer>
+  <footer><span>MFAPIs · Financial data demonstration</span><span>Source attribution travels with every record.</span></footer>
 </main>
 </body></html>
