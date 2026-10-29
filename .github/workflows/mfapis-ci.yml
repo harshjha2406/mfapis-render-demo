@@ -1,0 +1,41 @@
+name: MFAPIs CI
+
+on:
+  push:
+    branches:
+      - feature/biquote-standalone-worker
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Python tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      AUTO_REFRESH_HISTORY: "false"
+      FX_LIVE_DISPLAY_AUTHORIZED: "false"
+      PYTHONDONTWRITEBYTECODE: "1"
+      TEST_DATABASE_URL: ""
+    steps:
+      - name: Check out source code
+        uses: actions/checkout@v4
+      - name: Set up Python 3.13
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+          cache: pip
+          cache-dependency-path: requirements.txt
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+      - name: Compile Python source
+        run: python -m compileall -q mfapis scripts tests
+      - name: Run deterministic test suite
+        run: python -m pytest -q tests/test_deployment.py tests/test_live_fx.py tests/test_pipeline.py
